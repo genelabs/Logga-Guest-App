@@ -60,3 +60,4 @@ Icon?
 
 # Xcode automatically created folders/files
 *.xcworkspace
+GoogleService-Info.plist
