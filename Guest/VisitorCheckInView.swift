@@ -1,52 +1,39 @@
 import SwiftUI
 
-struct GuestListView: View {
+struct VisitorCheckInView: View {
     @EnvironmentObject var guestManager: GuestManager
-    let action: String?
     @Binding var showWelcome: Bool
     
     @State private var fullName = ""
     @State private var company = ""
     @State private var phoneNumber = ""
+    @State private var purpose = ""
     @State private var showThankYou = false
     @State private var currentStep = 1
-    @State private var selectedGuest: Guest? = nil
+    @State private var generatedPassNumber = ""
+    
+    // Photo capture states
+    @State private var capturedPhoto: UIImage?
+    @State private var showingImagePicker = false
+    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .camera
+    @State private var showingSourceSelector = false
+    
     @FocusState private var isNameFieldFocused: Bool
     @FocusState private var isCompanyFieldFocused: Bool
     @FocusState private var isPhoneFieldFocused: Bool
-    @FocusState private var isSearchFieldFocused: Bool
-    
-    @State private var searchName = ""
-    @State private var showCheckoutThankYou = false
-    @State private var checkedOutGuestName = ""
+    @FocusState private var isPurposeFieldFocused: Bool
     @State private var phoneError: String? = nil
     @State private var isViewVisible = false
     
     private let maroon = Color(red: 0.5, green: 0, blue: 0)
-    
-    var totalSteps: Int {
-        selectedGuest == nil ? 3 : 2
-    }
+    private let totalSteps = 4  // Changed from 3 to 4 (added photo step)
     
     var body: some View {
         VStack(spacing: 0) {
-            if action == "checkIn" {
-                if showThankYou {
-                    thankYouView
-                } else {
-                    checkInView
-                }
-            } else if action == "checkOut" {
-                if showCheckoutThankYou {
-                    checkoutThankYouView
-                } else {
-                    checkOutView
-                }
+            if showThankYou {
+                thankYouView
             } else {
-                Text("Guest List Overview")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(maroon)
-                    .padding(.top, 20)
+                checkInView
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -67,8 +54,6 @@ struct GuestListView: View {
             }
         }
     }
-    
-    // MARK: - Check-In Views
     
     private var checkInView: some View {
         VStack(spacing: 0) {
@@ -123,7 +108,7 @@ struct GuestListView: View {
     
     private var headerView: some View {
         VStack(spacing: 12) {
-            Text("Check In a New Guest")
+            Text("Visitor Check In")
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundColor(maroon)
             
@@ -137,13 +122,12 @@ struct GuestListView: View {
     private var stepDescription: String {
         switch currentStep {
         case 1:
-            return "Enter your name"
+            return "Enter your details"
         case 2:
-            if selectedGuest != nil {
-                return "Confirm your details"
-            }
-            return "Enter company & phone"
+            return "Purpose of visit"
         case 3:
+            return "Take visitor photo"
+        case 4:
             return "Review and confirm"
         default:
             return ""
@@ -181,12 +165,10 @@ struct GuestListView: View {
             case 1:
                 stepOneView
             case 2:
-                if selectedGuest != nil {
-                    confirmGuestView
-                } else {
-                    stepTwoView
-                }
+                stepTwoView
             case 3:
+                stepThreePhotoView
+            case 4:
                 confirmDetailsView
             default:
                 EmptyView()
@@ -195,6 +177,8 @@ struct GuestListView: View {
         .padding(.horizontal, 20)
         .padding(.top, 30)
     }
+    
+    // MARK: - Step 1: Personal Details
     
     private var stepOneView: some View {
         VStack(spacing: 20) {
@@ -214,6 +198,9 @@ struct GuestListView: View {
                         .textContentType(.name)
                         .submitLabel(.next)
                         .focused($isNameFieldFocused)
+                        .onSubmit {
+                            isCompanyFieldFocused = true
+                        }
                 }
                 .padding()
                 .background(Color(.systemBackground))
@@ -225,53 +212,6 @@ struct GuestListView: View {
                 .shadow(color: isNameFieldFocused ? maroon.opacity(0.1) : Color.clear, radius: 8)
             }
             
-            // Guest suggestions
-            guestSuggestionsView
-        }
-    }
-    
-    private var guestSuggestionsView: some View {
-        VStack(spacing: 0) {
-            if !fullName.isEmpty && !matchingGuests.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Returning Guest?")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundColor(maroon)
-                        .padding(.horizontal, 4)
-                    
-                    LazyVStack(spacing: 10) {
-                        ForEach(matchingGuests.prefix(3)) { guest in
-                            ReturningGuestCard(
-                                guest: guest,
-                                onSelect: {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                        selectedGuest = guest
-                                        fullName = guest.fullName
-                                        company = guest.company
-                                        phoneNumber = guest.phoneNumber
-                                        currentStep = 2
-                                        isNameFieldFocused = false
-                                    }
-                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                }
-                            )
-                        }
-                    }
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: matchingGuests.count)
-    }
-    
-    private var matchingGuests: [Guest] {
-        guestManager.guests.filter {
-            $0.fullName.lowercased().contains(fullName.lowercased()) && fullName.count >= 2
-        }
-    }
-    
-    private var stepTwoView: some View {
-        VStack(spacing: 20) {
             // Company input
             VStack(alignment: .leading, spacing: 8) {
                 Text("Company")
@@ -288,6 +228,9 @@ struct GuestListView: View {
                         .textContentType(.organizationName)
                         .submitLabel(.next)
                         .focused($isCompanyFieldFocused)
+                        .onSubmit {
+                            isPhoneFieldFocused = true
+                        }
                 }
                 .padding()
                 .background(Color(.systemBackground))
@@ -313,7 +256,7 @@ struct GuestListView: View {
                     TextField("Enter phone number", text: $phoneNumber)
                         .font(.system(size: 20, weight: .regular, design: .rounded))
                         .keyboardType(.phonePad)
-                        .submitLabel(.done)
+                        .submitLabel(.next)
                         .focused($isPhoneFieldFocused)
                 }
                 .padding()
@@ -339,31 +282,244 @@ struct GuestListView: View {
         }
     }
     
-    private var confirmGuestView: some View {
+    // MARK: - Step 2: Purpose
+    
+    private var stepTwoView: some View {
         VStack(spacing: 20) {
-            VStack(spacing: 16) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.green)
-                
-                Text("Welcome Back!")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Purpose of Visit")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(maroon)
+                
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundColor(isPurposeFieldFocused ? maroon : .gray)
+                        .font(.system(size: 20))
+                        .padding(.top, 12)
+                    
+                    TextEditor(text: $purpose)
+                        .font(.system(size: 20, weight: .regular, design: .rounded))
+                        .frame(minHeight: 120)
+                        .scrollContentBackground(.hidden)
+                        .focused($isPurposeFieldFocused)
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isPurposeFieldFocused ? maroon : Color.gray.opacity(0.3), lineWidth: 2)
+                )
+                .shadow(color: isPurposeFieldFocused ? maroon.opacity(0.1) : Color.clear, radius: 8)
+                
+                Text("E.g., Meeting with John Smith, Delivery, Job Interview")
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 4)
             }
-            
-            VStack(alignment: .leading, spacing: 16) {
-                ConfirmationRow(icon: "person.fill", label: "Name", value: selectedGuest!.fullName)
-                ConfirmationRow(icon: "building.2.fill", label: "Company", value: selectedGuest!.company)
-                ConfirmationRow(icon: "phone.fill", label: "Phone", value: selectedGuest!.phoneNumber)
-            }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white)
-                    .shadow(color: maroon.opacity(0.1), radius: 10, x: 0, y: 4)
-            )
         }
     }
+    
+    // MARK: - Step 3: Photo Capture
+    
+    private var stepThreePhotoView: some View {
+        VStack(spacing: 20) {
+            Text("Visitor Photo")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundColor(maroon)
+            
+            Text("Take a photo for the visitor badge (optional)")
+                .font(.system(size: 16, design: .rounded))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            
+            Spacer()
+            
+            // Photo preview or placeholder
+            if let photo = capturedPhoto {
+                photoPreviewView(photo: photo)
+            } else {
+                photoPlaceholderView
+            }
+            
+            Spacer()
+            
+            // Photo action buttons
+            if capturedPhoto == nil {
+                photoActionButtons
+            }
+        }
+        .sheet(isPresented: $showingSourceSelector) {
+            sourceSelectionSheet
+        }
+        .sheet(isPresented: $showingImagePicker) {
+            ImagePicker(image: $capturedPhoto, sourceType: imagePickerSourceType)
+        }
+    }
+    
+    private func photoPreviewView(photo: UIImage) -> some View {
+        VStack(spacing: 16) {
+            Image(uiImage: photo)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 300, height: 300)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(maroon, lineWidth: 3)
+                )
+                .shadow(color: .black.opacity(0.2), radius: 10)
+            
+            Button(action: {
+                showingSourceSelector = true
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "camera.rotate")
+                    Text("Retake Photo")
+                }
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(maroon)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(maroon.opacity(0.1))
+                .cornerRadius(10)
+            }
+        }
+    }
+    
+    private var photoPlaceholderView: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.gray.opacity(0.1))
+                    .frame(width: 300, height: 300)
+                
+                VStack(spacing: 16) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray.opacity(0.5))
+                    
+                    Text("No Photo")
+                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            Text("Photo is optional but recommended for security")
+                .font(.system(size: 14, design: .rounded))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+    }
+    
+    private var photoActionButtons: some View {
+        VStack(spacing: 12) {
+            if UIImagePickerController.isCameraAvailable {
+                Button(action: {
+                    imagePickerSourceType = .camera
+                    showingImagePicker = true
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 20))
+                        Text("Take Photo")
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(maroon)
+                    .cornerRadius(12)
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
+            
+            if UIImagePickerController.isPhotoLibraryAvailable {
+                Button(action: {
+                    imagePickerSourceType = .photoLibrary
+                    showingImagePicker = true
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 20))
+                        Text("Choose from Library")
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundColor(maroon)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(maroon, lineWidth: 2)
+                    )
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private var sourceSelectionSheet: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                if UIImagePickerController.isCameraAvailable {
+                    Button(action: {
+                        showingSourceSelector = false
+                        imagePickerSourceType = .camera
+                        showingImagePicker = true
+                    }) {
+                        HStack {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 24))
+                            Text("Take Photo")
+                                .font(.system(size: 18, weight: .semibold))
+                            Spacer()
+                        }
+                        .foregroundColor(.primary)
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
+                }
+                
+                if UIImagePickerController.isPhotoLibraryAvailable {
+                    Button(action: {
+                        showingSourceSelector = false
+                        imagePickerSourceType = .photoLibrary
+                        showingImagePicker = true
+                    }) {
+                        HStack {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.system(size: 24))
+                            Text("Choose from Library")
+                                .font(.system(size: 18, weight: .semibold))
+                            Spacer()
+                        }
+                        .foregroundColor(.primary)
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
+                }
+            }
+            .padding()
+            .navigationTitle("Select Photo Source")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showingSourceSelector = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(250)])
+    }
+    
+    // MARK: - Step 4: Confirmation
     
     private var confirmDetailsView: some View {
         VStack(spacing: 20) {
@@ -385,6 +541,33 @@ struct GuestListView: View {
                 ConfirmationRow(icon: "person.fill", label: "Name", value: fullName)
                 ConfirmationRow(icon: "building.2.fill", label: "Company", value: company)
                 ConfirmationRow(icon: "phone.fill", label: "Phone", value: phoneNumber)
+                ConfirmationRow(icon: "doc.text.fill", label: "Purpose", value: purpose)
+                
+                // Photo confirmation
+                if let photo = capturedPhoto {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(maroon)
+                                .frame(width: 24)
+                            
+                            Text("Photo")
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Image(uiImage: photo)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 120, height: 120)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(maroon, lineWidth: 2)
+                            )
+                    }
+                }
             }
             .padding(20)
             .background(
@@ -395,14 +578,13 @@ struct GuestListView: View {
         }
     }
     
+    // MARK: - Navigation Buttons
+    
     private var navigationButtonsView: some View {
         HStack(spacing: 12) {
             if currentStep > 1 {
                 Button(action: {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        if currentStep == 2 && selectedGuest != nil {
-                            selectedGuest = nil
-                        }
                         currentStep -= 1
                         phoneError = nil
                     }
@@ -425,9 +607,7 @@ struct GuestListView: View {
             
             Button(action: {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    if selectedGuest != nil && currentStep == 2 {
-                        submitCheckIn()
-                    } else if currentStep < totalSteps {
+                    if currentStep < totalSteps {
                         currentStep += 1
                     } else {
                         submitCheckIn()
@@ -436,10 +616,10 @@ struct GuestListView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }) {
                 HStack(spacing: 8) {
-                    Text(buttonText)
+                    Text(currentStep == totalSteps ? "Check In" : (currentStep == 3 ? "Skip" : "Next"))
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                     
-                    if currentStep < totalSteps && selectedGuest == nil {
+                    if currentStep < totalSteps {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 16, weight: .semibold))
                     } else {
@@ -469,15 +649,7 @@ struct GuestListView: View {
         .padding(.bottom, 10)
     }
     
-    private var buttonText: String {
-        if selectedGuest != nil && currentStep == 2 {
-            return "Check In"
-        } else if currentStep == totalSteps {
-            return "Check In"
-        } else {
-            return "Next"
-        }
-    }
+    // MARK: - Thank You View
     
     private var thankYouView: some View {
         VStack(spacing: 30) {
@@ -497,6 +669,29 @@ struct GuestListView: View {
                     .multilineTextAlignment(.center)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 40)
+                
+                // Pass number display
+                VStack(spacing: 12) {
+                    Text("Your Visitor Pass Number")
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundColor(.secondary)
+                    
+                    Text(generatedPassNumber)
+                        .font(.system(size: 48, weight: .bold, design: .monospaced))
+                        .foregroundColor(maroon)
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.white)
+                                .shadow(color: maroon.opacity(0.2), radius: 10, x: 0, y: 4)
+                        )
+                }
+                .padding(.top, 20)
+                
+                Text("Please keep this number for reference")
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                    .foregroundColor(.secondary)
             }
             
             Spacer()
@@ -528,268 +723,7 @@ struct GuestListView: View {
         .transition(.opacity.combined(with: .scale))
     }
     
-    // MARK: - Check-Out Views
-    
-    private var checkOutView: some View {
-        VStack(spacing: 0) {
-            // Top navigation
-            HStack {
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        searchName = ""
-                        showWelcome = true
-                    }
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("Back")
-                            .font(.system(size: 18, weight: .semibold))
-                    }
-                    .foregroundColor(maroon)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .opacity(isViewVisible ? 1 : 0)
-            
-            Spacer()
-            
-            // Header
-            VStack(spacing: 12) {
-                Text("Check Out")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundColor(maroon)
-                
-                Text("Search for your name below")
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 20)
-            .opacity(isViewVisible ? 1 : 0)
-            .offset(y: isViewVisible ? 0 : 20)
-            
-            // Search field
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(isSearchFieldFocused ? maroon : .gray)
-                        .font(.system(size: 20))
-                    
-                    TextField("Enter your full name", text: $searchName)
-                        .font(.system(size: 20, weight: .regular, design: .rounded))
-                        .textContentType(.name)
-                        .submitLabel(.search)
-                        .focused($isSearchFieldFocused)
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isSearchFieldFocused ? maroon : Color.gray.opacity(0.3), lineWidth: 2)
-                )
-                .shadow(color: isSearchFieldFocused ? maroon.opacity(0.1) : Color.clear, radius: 8)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 30)
-            .opacity(isViewVisible ? 1 : 0)
-            .offset(y: isViewVisible ? 0 : 20)
-            
-            // Search results
-            searchResultsView
-            
-            Spacer()
-        }
-    }
-    
-    private var searchResultsView: some View {
-        VStack {
-            if !searchName.isEmpty {
-                if matchingCheckoutGuests.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "person.fill.questionmark")
-                            .font(.system(size: 50))
-                            .foregroundColor(.gray.opacity(0.5))
-                        
-                        Text("No matching guests found")
-                            .font(.system(size: 18, weight: .medium, design: .rounded))
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.top, 60)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(matchingCheckoutGuests) { guest in
-                                GuestCard(
-                                    guest: guest,
-                                    onCheckOut: {
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            checkedOutGuestName = guest.fullName
-                                            guestManager.checkOutGuest(id: guest.id ?? "")
-                                            showCheckoutThankYou = true
-                                        }
-                                        UINotificationFeedbackGenerator().notificationOccurred(.success)
-                                    }
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                    }
-                }
-            }
-        }
-    }
-    
-    private var matchingCheckoutGuests: [Guest] {
-        guestManager.guests.filter {
-            $0.fullName.lowercased().contains(searchName.lowercased()) &&
-            $0.checkOutTime == nil &&
-            searchName.count >= 2
-        }
-    }
-    
-    private var checkoutThankYouView: some View {
-        VStack(spacing: 30) {
-            Spacer()
-            
-            VStack(spacing: 20) {
-                Image(systemName: "hand.wave.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.orange)
-                
-                Text("See You Soon!")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .foregroundColor(maroon)
-                
-                Text("\(checkedOutGuestName), thank you for visiting TM45.")
-                    .font(.system(size: 20, weight: .medium, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 40)
-            }
-            
-            Spacer()
-            
-            Button(action: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showCheckoutThankYou = false
-                    searchName = ""
-                    checkedOutGuestName = ""
-                    showWelcome = true
-                }
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            }) {
-                HStack(spacing: 12) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 20))
-                    Text("Return to Home")
-                        .font(.system(size: 20, weight: .semibold, design: .rounded))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
-                .background(maroon)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-                .shadow(color: maroon.opacity(0.3), radius: 8, x: 0, y: 4)
-            }
-            .buttonStyle(ScaleButtonStyle())
-            .padding(.horizontal, 40)
-            .padding(.bottom, 40)
-        }
-        .transition(.opacity.combined(with: .scale))
-    }
-    
-    // MARK: - Card Views
-    
-    struct ReturningGuestCard: View {
-        let guest: Guest
-        let onSelect: () -> Void
-        private let maroon = Color(red: 0.5, green: 0, blue: 0)
-        
-        var body: some View {
-            Button(action: onSelect) {
-                HStack(spacing: 16) {
-                    Image(systemName: "arrow.turn.down.right")
-                        .font(.system(size: 20))
-                        .foregroundColor(maroon)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(guest.fullName)
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundColor(.primary)
-                        
-                        Text(guest.company)
-                            .font(.system(size: 15, weight: .regular, design: .rounded))
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(maroon.opacity(0.6))
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white)
-                        .shadow(color: .gray.opacity(0.15), radius: 8, x: 0, y: 2)
-                )
-            }
-            .buttonStyle(ScaleButtonStyle())
-        }
-    }
-    
-    struct GuestCard: View {
-        let guest: Guest
-        let onCheckOut: () -> Void
-        private let maroon = Color(red: 0.5, green: 0, blue: 0)
-        
-        var body: some View {
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(guest.fullName)
-                        .font(.system(size: 20, weight: .semibold, design: .rounded))
-                        .foregroundColor(.primary)
-                    
-                    Text(guest.company)
-                        .font(.system(size: 16, weight: .regular, design: .rounded))
-                        .foregroundColor(.secondary)
-                    
-                    Text("Checked in: \(guest.checkInTime.formatted(date: .omitted, time: .shortened))")
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Button(action: onCheckOut) {
-                    HStack(spacing: 6) {
-                        Text("Check Out")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(maroon)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                }
-                .buttonStyle(ScaleButtonStyle())
-            }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white)
-                    .shadow(color: .gray.opacity(0.15), radius: 8, x: 0, y: 2)
-            )
-        }
-    }
+    // MARK: - Supporting Views
     
     struct ConfirmationRow: View {
         let icon: String
@@ -812,6 +746,7 @@ struct GuestListView: View {
                     Text(value)
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
+                        .lineLimit(label == "Purpose" ? nil : 1)
                 }
                 
                 Spacer()
@@ -824,34 +759,58 @@ struct GuestListView: View {
     private func isNextDisabled() -> Bool {
         switch currentStep {
         case 1:
-            return fullName.isEmpty
-        case 2:
-            if selectedGuest != nil { return false }
+            if fullName.isEmpty || company.isEmpty || phoneNumber.isEmpty {
+                return true
+            }
             if !phoneNumber.isEmpty {
                 let phoneRegex = "^[0-9+\\-() ]{7,}$"
                 let predicate = NSPredicate(format: "SELF MATCHES %@", phoneRegex)
                 let isValid = predicate.evaluate(with: phoneNumber)
                 phoneError = isValid ? nil : "Please enter a valid phone number"
-                return company.isEmpty || !isValid
+                return !isValid
             }
-            return company.isEmpty || phoneNumber.isEmpty
+            return false
+        case 2:
+            return purpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case 3:
+            return false  // Photo is optional, never disable
+        case 4:
             return false
         default:
             return true
         }
     }
     
+    private func generatePassNumber() -> String {
+        let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        let numbers = "0123456789"
+        
+        let letterPart = String((0..<2).map { _ in letters.randomElement()! })
+        let numberPart = String((0..<4).map { _ in numbers.randomElement()! })
+        
+        return "\(letterPart)-\(numberPart)"
+    }
+    
     private func submitCheckIn() {
-        let newGuest = Guest(
-            id: nil, // Let Firebase generate the ID
+        generatedPassNumber = generatePassNumber()
+        
+        // Convert photo to data
+        let photoData = capturedPhoto?.jpegData(compressionQuality: 0.7)
+        
+        let newVisitor = Visitor(
+            id: nil,
             fullName: fullName,
             company: company,
             phoneNumber: phoneNumber,
+            purpose: purpose,
+            passNumber: generatedPassNumber,
             checkInTime: Date(),
-            checkOutTime: nil
+            checkOutTime: nil,
+            photoData: photoData  // Include photo data
         )
-        guestManager.addGuest(newGuest)
+        
+        guestManager.addVisitor(newVisitor)
+        
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             showThankYou = true
         }
@@ -862,28 +821,22 @@ struct GuestListView: View {
         fullName = ""
         company = ""
         phoneNumber = ""
+        purpose = ""
+        generatedPassNumber = ""
+        capturedPhoto = nil
         currentStep = 1
-        selectedGuest = nil
         phoneError = nil
         isNameFieldFocused = false
         isCompanyFieldFocused = false
         isPhoneFieldFocused = false
+        isPurposeFieldFocused = false
     }
 }
 
-struct GuestListView_Previews: PreviewProvider {
+struct VisitorCheckInView_Previews: PreviewProvider {
     static var previews: some View {
-        let manager = GuestManager()
-        manager.addGuest(Guest(
-            id: nil,
-            fullName: "John Doe",
-            company: "xAI",
-            phoneNumber: "1234567890",
-            checkInTime: Date().addingTimeInterval(-3600),
-            checkOutTime: nil
-        ))
-        return GuestListView(action: "checkIn", showWelcome: .constant(false))
-            .environmentObject(manager)
+        VisitorCheckInView(showWelcome: .constant(false))
+            .environmentObject(GuestManager())
             .previewDevice("iPad Pro (12.9-inch) (6th generation)")
     }
 }

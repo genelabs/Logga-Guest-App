@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct CheckInOutView: View {
+struct VisitorCheckInOutView: View {
     @Binding var showWelcome: Bool
-    @Binding var showCheckInOut: Bool
+    @Binding var showVisitorCheckInOut: Bool
     @Binding var selectedAction: String?
     
     @State private var currentDate = Date()
@@ -12,11 +12,11 @@ struct CheckInOutView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Top navigation bar
+            // Top navigation
             HStack {
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        showCheckInOut = false
+                        showVisitorCheckInOut = false
                         showWelcome = true
                     }
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -29,7 +29,6 @@ struct CheckInOutView: View {
                     }
                     .foregroundColor(maroon)
                 }
-                .accessibilityLabel("Return to welcome screen")
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -47,9 +46,8 @@ struct CheckInOutView: View {
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundColor(.black)
                     .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isHeader)
                 
-                Text("Staff Check-In/Out")
+                Text("Visitor Check-In/Out")
                     .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundColor(.secondary)
             }
@@ -67,13 +65,11 @@ struct CheckInOutView: View {
                     color: .green
                 ) {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        selectedAction = "checkIn"
-                        showCheckInOut = false
+                        selectedAction = "visitorCheckIn"
+                        showVisitorCheckInOut = false
                     }
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 }
-                .accessibilityLabel("Check in")
-                .accessibilityHint("Opens the check-in form to register your arrival")
                 
                 ActionButton(
                     icon: "person.badge.minus",
@@ -82,13 +78,11 @@ struct CheckInOutView: View {
                     color: .red
                 ) {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        selectedAction = "checkOut"
-                        showCheckInOut = false
+                        selectedAction = "visitorCheckOut"
+                        showVisitorCheckInOut = false
                     }
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 }
-                .accessibilityLabel("Check out")
-                .accessibilityHint("Opens the check-out form to register your departure")
             }
             .padding(.horizontal, 40)
             .padding(.top, 40)
@@ -126,12 +120,10 @@ struct CheckInOutView: View {
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .foregroundColor(maroon)
-                .accessibilityLabel("Current time: \(formattedTime(currentDate))")
             
             Text(formattedDate(currentDate))
                 .font(.system(size: 18, weight: .medium, design: .rounded))
                 .foregroundColor(.secondary)
-                .accessibilityLabel("Current date: \(formattedDate(currentDate))")
         }
         .opacity(isViewVisible ? 1 : 0)
         .offset(y: isViewVisible ? 0 : 15)
@@ -150,55 +142,11 @@ struct CheckInOutView: View {
     }
 }
 
-// Custom ActionButton component for Check In/Out buttons
-struct ActionButton: View {
-    let icon: String
-    let label: String
-    let subtitle: String
-    let color: Color
-    let action: () -> Void
-    @State private var isPressed = false
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 40, weight: .semibold))
-                
-                VStack(spacing: 4) {
-                    Text(label)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                    
-                    Text(subtitle)
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .opacity(0.9)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 35)
-            .background(color)
-            .foregroundColor(.white)
-            .cornerRadius(16)
-            .shadow(color: color.opacity(0.3), radius: 8, x: 0, y: 4)
-        }
-        .buttonStyle(ScaleButtonStyle())
-    }
-}
-
-// Custom button style for press animation
-struct ScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
-    }
-}
-
-struct CheckInOutView_Previews: PreviewProvider {
+struct VisitorCheckInOutView_Previews: PreviewProvider {
     static var previews: some View {
-        CheckInOutView(
+        VisitorCheckInOutView(
             showWelcome: .constant(false),
-            showCheckInOut: .constant(true),
+            showVisitorCheckInOut: .constant(true),
             selectedAction: .constant(nil)
         )
         .previewDevice("iPad Pro (12.9-inch) (6th generation)")
